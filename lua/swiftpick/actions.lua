@@ -1,4 +1,3 @@
----Provides actions for the Swiftpick plugin
 ---@module "swiftpick.actions"
 ---@class SwiftpickActions
 
@@ -11,19 +10,62 @@ local function EMPTY()
   return config.values.empty_entry_identifier
 end
 
----Actions module for Swiftpick plugin. Provides functions to manipulate the picker list, open/close the picker window, and toggle display and storage context settings.
 ---@class SwiftpickActions
 local M = {}
 
----@class SwiftpickAddOpts
----@field filename? string The filename to add. Defaults to the buffer that the picker was opened from.
----@field cwd? string The cwd entry to add the file under. Defaults to `vim.uv.cwd()`.
----@field index? integer The 1-based index at which to insert the filename in the entry list. Defaults to appending at the end.
----@field use_global_context? boolean Whether to use the global context for storage. Defaults to `false`. Overrides `SwiftpickAddOpts.cwd` if `true`.
+local function prompt_for_label(default_text, callback)
+  local ok, NuiInput = pcall(require, "nui.input")
+  if ok then
+    local popup_options = {
+      position = "50%",
+      size = { width = 60 },
+      border = {
+        style = "rounded",
+        text = { top = " label ", top_align = "center" },
+      },
+      zindex = 200,
+    }
+    local input = NuiInput(popup_options, {
+      prompt = "> ",
+      default_value = default_text,
+      on_submit = function(value)
+        callback(value or default_text)
+      end,
+    })
 
---- Add a file to the picker list.
---- Defaults to appending the file of the buffer that the picker was opened from to the end of the list, under either the storage context based on plugin state.
---- @param opts? SwiftpickAddOpts Options to override default add behavior.
+    local old_guicursor = vim.o.guicursor
+    local function restore_cursor()
+      vim.schedule(function()
+        vim.api.nvim_set_hl(0, "SwiftpickCursor", { blend = 100, nocombine = true })
+        vim.opt.guicursor:append("a:SwiftpickCursor/SwiftpickCursor")
+      end)
+    end
+
+    vim.o.guicursor = old_guicursor:gsub(",?a:SwiftpickCursor/SwiftpickCursor", "")
+
+    input:mount()
+    vim.cmd("startinsert!")
+
+    input:on("BufLeave", function()
+      restore_cursor()
+    end)
+  else
+    vim.ui.input({ prompt = "Label: ", default = default_text }, function(value)
+      if value then
+        callback(value)
+      end
+    end)
+  end
+end
+
+---@class SwiftpickAddOpts
+---@field filename? string
+---@field cwd? string
+---@field index? integer
+---@field use_global_context? boolean
+---@field line? integer
+---@field label? string
+
 function M.add(opts)
   opts = opts or {}
 
@@ -34,36 +76,60 @@ function M.add(opts)
     )
     return
   end
-  local filename = opts.filename or vim.api.nvim_buf_get_name(state.opened_picker_from.buf)
+
+  local source_buf = state.opened_picker_from.buf or vim.api.nvim_get_current_buf()
+  local source_win = state.opened_picker_from.win or vim.api.nvim_get_current_win()
+
+  local filepath = opts.filename or vim.api.nvim_buf_get_name(source_buf)
   local cwd = opts.cwd or vim.uv.cwd()
 
-  -- if index is provided, we insert rather than append
-  if opts.index then
-    if opts.use_global_context then
-      storage.add_filename_at_global(filename, opts.index)
+  local line = opts.line
+  if not line and source_win and vim.api.nvim_win_is_valid(source_win) then
+    line = vim.api.nvim_win_get_cursor(source_win)[1]
+  end
+  line = line or 1
+
+  local function do_add(label)
+    local entry = { path = filepath, line = line, label = label or "" }
+    if opts.index then
+      if opts.use_global_context then
+        storage.add_entry_at_global(entry, opts.index)
+      else
+        storage.add_entry_at_for_cwd(cwd, entry, opts.index)
+      end
     else
-      storage.add_filename_at_for_cwd(cwd, filename, opts.index)
+      if opts.use_global_context then
+        storage.add_entry_global(entry)
+      else
+        storage.add_entry_for_cwd(cwd, entry)
+      end
     end
-  -- if no index is provided, we append as usual
-  else
-    if opts.use_global_context then
-      storage.add_filename_global(filename)
-    else
-      storage.add_filename_for_cwd(cwd, filename)
+    require("swiftpick.window").refresh_picker_window()
+  end
+
+  if opts.label then
+    do_add(opts.label)
+    return
+  end
+
+  local default_label = ""
+  if source_buf and vim.api.nvim_buf_is_valid(source_buf) then
+    local lines = vim.api.nvim_buf_get_lines(source_buf, line - 1, line, false)
+    if lines and lines[1] then
+      default_label = vim.trim(lines[1])
     end
   end
 
-  require("swiftpick.window").refresh_picker_window()
+  prompt_for_label(default_label, function(label)
+    do_add(label)
+  end)
 end
 
 ---@class SwiftpickRemoveOpts
----@field file? string|integer The filename or 1-based index of the entry to remove.
----@field cwd? string The cwd entry to remove the file from. Defaults to `vim.uv.cwd()`.
----@field use_global_context? boolean Whether to use the global context for storage. Defaults to `false`. Overrides `SwiftpickRemoveOpts.cwd` if `true`.
+---@field file? SwiftpickEntry|integer
+---@field cwd? string
+---@field use_global_context? boolean
 
---- Remove a file from the picker list by filename or index.
---- Defaults to removing the file of the buffer that the picker was opened from, under the storage context based on plugin state.
---- @param opts? SwiftpickRemoveOpts Options to override default remove behavior.
 function M.remove(opts)
   opts = opts or {}
 
@@ -75,26 +141,44 @@ function M.remove(opts)
     return
   end
 
-  local file = opts.file or vim.api.nvim_buf_get_name(state.opened_picker_from.buf)
   local cwd = opts.cwd or vim.uv.cwd()
+
+  if not opts.file then
+    local buf_path = vim.api.nvim_buf_get_name(state.opened_picker_from.buf)
+    local entries = opts.use_global_context and storage.get_entries_global()
+      or storage.get_entries_for_cwd(cwd)
+    for i, entry in ipairs(entries) do
+      if type(entry) == "table" and entry.path == buf_path then
+        if opts.use_global_context then
+          storage.remove_entry_at_global(i)
+        else
+          storage.remove_entry_at_for_cwd(cwd, i)
+        end
+        require("swiftpick.window").refresh_picker_window()
+        return
+      end
+    end
+    return
+  end
+
+  local file = opts.file
 
   if type(file) == "number" then
     local index = file
     if opts.use_global_context then
-      storage.remove_filename_at_global(index)
+      storage.remove_entry_at_global(index)
     else
-      storage.remove_filename_at_for_cwd(cwd, index)
+      storage.remove_entry_at_for_cwd(cwd, index)
     end
-  elseif type(file) == "string" then
-    local filename = file
+  elseif type(file) == "table" then
     if opts.use_global_context then
-      storage.remove_filename_global(filename)
+      storage.remove_entry_global(file)
     else
-      storage.remove_filename_for_cwd(cwd, filename)
+      storage.remove_entry_for_cwd(cwd, file)
     end
   else
     vim.notify(
-      "Invalid file identifier for removal: must be filename string or 1-based index number",
+      "Invalid file identifier for removal: must be entry table or 1-based index number",
       vim.log.levels.ERROR
     )
     return
@@ -103,21 +187,14 @@ function M.remove(opts)
   require("swiftpick.window").refresh_picker_window()
 end
 
----Open the swiftpick picker window.
----Respects `config.global_picker_by_default` when `global_picker` is not provided.
----Stores the calling window and buffer in `state` so they can be restored on close.
----Does nothing if the picker is already open.
----@param opts? SwiftpickOpenPickerOverrides options to customize the picker behavior
 function M.open_picker(opts)
   if state.picker_win ~= nil then
     return
   end
-  -- Resolve the nil/bool tri-state: nil → config default, bool → explicit override.
   state.opened_picker_from = { buf = vim.api.nvim_get_current_buf(), win = vim.api.nvim_get_current_win() }
   require("swiftpick.window").create_picker_window(opts)
 end
 
---- Close the picker window if it is open and valid.
 function M.close_picker()
   if state.picker_win and vim.api.nvim_win_is_valid(state.picker_win) then
     vim.api.nvim_win_close(state.picker_win, true)
@@ -125,12 +202,9 @@ function M.close_picker()
 end
 
 ---@class SwiftpickPruneOpts
----@field cwd? string The cwd entry to prune entries from. Defaults to `vim.uv.cwd()`.
----@field use_global_context? boolean Whether to use the global context for storage. Defaults to `false`. Overrides `SwiftpickPruneOpts.cwd` if `true`.
+---@field cwd? string
+---@field use_global_context? boolean
 
---- Prune empty and duplicate entries from the picker list.
---- Defaults to pruning the storage context based on plugin state.
---- @param opts? SwiftpickPruneOpts Options to override default prune behavior.
 function M.prune_entries(opts)
   opts = opts or {}
   local cwd = opts.cwd or vim.uv.cwd()
@@ -143,79 +217,82 @@ function M.prune_entries(opts)
   require("swiftpick.window").refresh_picker_window()
 end
 
---- Toggle the display of absolute paths in the picker.
 function M.toggle_display_absolute_paths()
   state.display_absolute_paths = not state.display_absolute_paths
   require("swiftpick.window").refresh_picker_window()
 end
 
---- Set whether to display absolute paths in the picker.
---- @param absolute boolean Whether to display absolute paths.
 function M.set_display_absolute_paths(absolute)
   state.display_absolute_paths = absolute
   require("swiftpick.window").refresh_picker_window()
 end
 
---- Toggle between global and local storage contexts for the picker.
---- Note that individual add/remove/prune actions can be overridden to use either context regardless of this state.
 function M.toggle_use_global_context()
   state.use_global_context = not state.use_global_context
   require("swiftpick.window").refresh_picker_window()
 end
 
---- Set whether to use the global storage context for the picker.
---- Note that individual add/remove/prune actions can be overridden to use either context regardless of this state.
---- @param use_global boolean Whether to use the global context.
 function M.set_use_global_context(use_global)
   state.use_global_context = use_global
   require("swiftpick.window").refresh_picker_window()
 end
 
---- Switch the picker window to pick mode, allowing selection and opening of files.
---- No-ops if the picker window is not open or valid.
 function M.switch_to_pick_mode()
   require("swiftpick.window").switch_to_pick_mode()
 end
 
---- Switch the picker window to edit mode, allowing direct editing of the entry list.
---- No-ops if the picker window is not open or valid.
 function M.switch_to_edit_mode()
   require("swiftpick.window").switch_to_edit_mode()
 end
 
 ---@class SwiftpickPickFileOpts
----@field cwd? string The cwd entry to pick the file from. Defaults to `vim.uv.cwd()`.
----@field use_global_context? boolean Whether to use the global context for storage. Defaults to `false`. Overrides `SwiftpickPickFileOpts.cwd` if `true`.
+---@field cwd? string
+---@field use_global_context? boolean
 
---- Open the specified file from the picker list.
---- Defaults to picking from the storage context based on plugin state.
---- @param file string|integer The filename or 1-based index of the entry to pick.
---- @param opts? SwiftpickPickFileOpts Options to override default pick behavior.
 function M.pick_file(file, opts)
   opts = opts or {}
 
   local cwd = opts.cwd or vim.uv.cwd()
   local use_global_context = opts.use_global_context or state.use_global_context
 
-  -- Parse the filepath from file as either a 1-based index or a filename string
-  local filepath = file
-      and type(file) == "number"
-      and (use_global_context and storage.get_filename_at_global(file) or storage.get_filename_at_for_cwd(cwd, file))
-    or (
-      type(file) == "string" and file --[[@as string]]
-    )
+  local entry = file
+  if type(file) == "number" then
+    entry = use_global_context and storage.get_entry_at_global(file) or storage.get_entry_at_for_cwd(cwd, file)
+  end
 
-  if filepath then
-    if filepath ~= "" and filepath ~= EMPTY() then
-      local absolute_path = paths.to_absolute(filepath, vim.uv.cwd())
+  if not entry then
+    vim.notify("No file specified to pick. Provide a file identifier in the options.", vim.log.levels.ERROR)
+    return
+  end
+
+  if type(entry) == "string" then
+    if entry ~= "" and entry ~= EMPTY() then
+      local absolute_path = paths.to_absolute(entry, vim.uv.cwd())
       M.close_picker()
       if state.opened_picker_from.win and vim.api.nvim_win_is_valid(state.opened_picker_from.win) then
         vim.api.nvim_set_current_win(state.opened_picker_from.win)
       end
       vim.cmd("edit " .. vim.fn.fnameescape(absolute_path))
     end
-  else
-    vim.notify("No file specified to pick. Provide a file identifier in the options.", vim.log.levels.ERROR)
+    return
+  end
+
+  if type(entry) == "table" then
+    if entry.path and entry.path ~= "" then
+      local absolute_path = paths.to_absolute(entry.path, vim.uv.cwd())
+      M.close_picker()
+      if state.opened_picker_from.win and vim.api.nvim_win_is_valid(state.opened_picker_from.win) then
+        vim.api.nvim_set_current_win(state.opened_picker_from.win)
+      end
+      vim.cmd("edit " .. vim.fn.fnameescape(absolute_path))
+      if entry.line and entry.line > 0 then
+        vim.schedule(function()
+          local line_count = vim.api.nvim_buf_line_count(0)
+          local target_line = math.min(entry.line, line_count)
+          vim.api.nvim_win_set_cursor(0, { target_line, 0 })
+        end)
+      end
+    end
   end
 end
 

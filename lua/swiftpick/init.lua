@@ -97,13 +97,11 @@ local function create_default_user_commands()
   end, { nargs = 1 })
   vim.api.nvim_create_user_command(prefix .. "RemoveLocal", function()
     actions.remove({
-      file = get_current_buf_name(),
       use_global_context = false,
     })
   end, {})
   vim.api.nvim_create_user_command(prefix .. "RemoveGlobal", function()
     actions.remove({
-      file = get_current_buf_name(),
       use_global_context = true,
     })
   end, {})

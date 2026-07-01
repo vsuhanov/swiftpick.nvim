@@ -155,8 +155,8 @@ local function create_pick_entry_keybinds(buf)
   local key_map = pick_entry_key_to_index()
   for key, index in pairs(key_map) do
     create_local_buffer_keybind(buf, "n", key, function()
-      local entries = state.use_global_context and storage.get_filenames_global()
-        or storage.get_filenames_for_cwd(vim.uv.cwd() --[[@as string]])
+      local entries = state.use_global_context and storage.get_entries_global()
+        or storage.get_entries_for_cwd(vim.uv.cwd() --[[@as string]])
       if index < 1 or index > #entries then
         return
       end
@@ -170,8 +170,8 @@ end
 ---@return nil
 local function create_pick_highlighted_entry_keybind(buf)
   create_local_buffer_keybind(buf, "n", config.values.keybinds.pick_highlighted_entry, function()
-    local entries = state.use_global_context and storage.get_filenames_global()
-      or storage.get_filenames_for_cwd(vim.uv.cwd() --[[@as string]])
+    local entries = state.use_global_context and storage.get_entries_global()
+      or storage.get_entries_for_cwd(vim.uv.cwd() --[[@as string]])
     local index = vim.api.nvim_win_get_cursor(state.picker_win)[1]
     if index < 1 or index > #entries then
       return
@@ -229,6 +229,7 @@ function M.create_picker_keybinds(buf)
   create_prune_empty_keybind(buf)
   create_edit_mode_keybind(buf)
   create_pick_entry_keybinds(buf)
+  create_pick_highlighted_entry_keybind(buf)
   create_toggle_display_absolute_paths_keybind(buf)
   create_toggle_global_picker_keybind(buf)
 end
