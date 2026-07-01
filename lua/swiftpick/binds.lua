@@ -191,12 +191,12 @@ local function create_exit_edit_mode_keybinds(buf)
       ipairs(config.values.keybinds.close_picker --[[@as table]])
     do
       create_local_buffer_keybind(buf, "n", key, function()
-        actions.switch_to_pick_mode()
+        actions.close_picker()
       end)
     end
   else
     create_local_buffer_keybind(buf, "n", config.values.keybinds.close_picker --[[@as string]], function()
-      actions.switch_to_pick_mode()
+      actions.close_picker()
     end)
   end
 end
