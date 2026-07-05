@@ -33,22 +33,8 @@ local function prompt_for_label(default_text, callback)
       end,
     })
 
-    local old_guicursor = vim.o.guicursor
-    local function restore_cursor()
-      vim.schedule(function()
-        vim.api.nvim_set_hl(0, "SwiftpickCursor", { blend = 100, nocombine = true })
-        vim.opt.guicursor:append("a:SwiftpickCursor/SwiftpickCursor")
-      end)
-    end
-
-    vim.o.guicursor = old_guicursor:gsub(",?a:SwiftpickCursor/SwiftpickCursor", "")
-
     input:mount()
     vim.cmd("startinsert!")
-
-    input:on("BufLeave", function()
-      restore_cursor()
-    end)
   else
     vim.ui.input({ prompt = "Label: ", default = default_text }, function(value)
       if value then

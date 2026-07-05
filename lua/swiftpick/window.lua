@@ -17,22 +17,6 @@ local NUMBERWIDTH = 2
 local edit_line_count = 0
 local exit_edit_mode_auto_cmd_id = nil
 local show_hints_in_edit_mode_autocmd_id = nil
-local old_guicursor = nil
-
-local function hide_cursor()
-  if old_guicursor == nil then
-    old_guicursor = vim.o.guicursor
-  end
-  vim.api.nvim_set_hl(0, "SwiftpickCursor", { blend = 100, nocombine = true })
-  vim.opt.guicursor:append("a:SwiftpickCursor/SwiftpickCursor")
-end
-
-local function show_cursor()
-  if old_guicursor ~= nil then
-    vim.o.guicursor = old_guicursor
-    old_guicursor = nil
-  end
-end
 
 ---@return string
 local function EMPTY()
@@ -181,8 +165,6 @@ end
 
 ---@param overrides_applied SwiftpickOpenPickerOverrides
 local function on_exit_picker(overrides_applied)
-  show_cursor()
-
   vim.api.nvim_buf_delete(state.picker_list_buf, { force = true })
   vim.api.nvim_buf_delete(state.picker_list_edit_buf, { force = true })
 
@@ -293,7 +275,6 @@ function M.switch_to_pick_mode()
   vim.cmd("stopinsert")
   vim.api.nvim_win_set_buf(state.picker_win, state.picker_list_buf)
 
-  show_cursor()
   vim.wo[state.picker_win].number = true
   vim.wo[state.picker_win].cursorline = true
   vim.wo[state.picker_win].numberwidth = NUMBERWIDTH
@@ -311,7 +292,6 @@ function M.switch_to_edit_mode()
   vim.bo[state.picker_list_edit_buf].modified = false
   vim.api.nvim_win_set_buf(state.picker_win, state.picker_list_edit_buf)
 
-  show_cursor()
   vim.wo[state.picker_win].number = true
   vim.wo[state.picker_win].cursorline = true
   vim.wo[state.picker_win].numberwidth = NUMBERWIDTH
