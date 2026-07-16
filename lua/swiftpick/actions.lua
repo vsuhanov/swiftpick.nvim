@@ -54,6 +54,9 @@ end
 
 function M.add(opts)
   opts = opts or {}
+  if opts.use_global_context == nil then
+    opts.use_global_context = state.use_global_context
+  end
 
   if not opts.filename and not state.opened_picker_from.buf then
     vim.notify(
@@ -76,7 +79,13 @@ function M.add(opts)
   line = line or 1
 
   local function do_add(label)
-    local entry = { path = filepath, line = line, label = label or "" }
+    local abs_path = paths.to_absolute(filepath, cwd)
+    local entry = {
+      path = abs_path,
+      rel_path = paths.to_relative(abs_path, cwd),
+      line = line,
+      label = label or "",
+    }
     if opts.index then
       if opts.use_global_context then
         storage.add_entry_at_global(entry, opts.index)
@@ -118,6 +127,9 @@ end
 
 function M.remove(opts)
   opts = opts or {}
+  if opts.use_global_context == nil then
+    opts.use_global_context = state.use_global_context
+  end
 
   if not opts.file and not state.opened_picker_from.buf then
     vim.notify(
@@ -134,7 +146,7 @@ function M.remove(opts)
     local entries = opts.use_global_context and storage.get_entries_global()
       or storage.get_entries_for_cwd(cwd)
     for i, entry in ipairs(entries) do
-      if type(entry) == "table" and entry.path == buf_path then
+      if type(entry) == "table" and (entry.path == buf_path or paths.resolve(entry, cwd) == buf_path) then
         if opts.use_global_context then
           storage.remove_entry_at_global(i)
         else
@@ -193,6 +205,9 @@ end
 
 function M.prune_entries(opts)
   opts = opts or {}
+  if opts.use_global_context == nil then
+    opts.use_global_context = state.use_global_context
+  end
   local cwd = opts.cwd or vim.uv.cwd()
   if opts.use_global_context then
     storage.prune_entries_global()
@@ -239,7 +254,10 @@ function M.pick_file(file, opts)
   opts = opts or {}
 
   local cwd = opts.cwd or vim.uv.cwd()
-  local use_global_context = opts.use_global_context or state.use_global_context
+  local use_global_context = opts.use_global_context
+  if use_global_context == nil then
+    use_global_context = state.use_global_context
+  end
 
   local entry = file
   if type(file) == "number" then
@@ -265,7 +283,7 @@ function M.pick_file(file, opts)
 
   if type(entry) == "table" then
     if entry.path and entry.path ~= "" then
-      local absolute_path = paths.to_absolute(entry.path, vim.uv.cwd())
+      local absolute_path = paths.resolve(entry, vim.uv.cwd())
       M.close_picker()
       if state.opened_picker_from.win and vim.api.nvim_win_is_valid(state.opened_picker_from.win) then
         vim.api.nvim_set_current_win(state.opened_picker_from.win)

@@ -4,6 +4,7 @@ local config = require("swiftpick.config")
 
 ---@class SwiftpickEntry
 ---@field path string
+---@field rel_path? string
 ---@field line integer
 ---@field label string
 
@@ -63,7 +64,9 @@ local function entries_match(a, b)
   if type(a) == "string" or type(b) == "string" then
     return a == b
   end
-  return a.path == b.path and a.line == b.line
+  local paths_match = a.path == b.path
+    or (a.rel_path ~= nil and a.rel_path ~= "" and a.rel_path == b.rel_path)
+  return paths_match and a.line == b.line
 end
 
 ---@class SwiftpickStorageModule
@@ -171,7 +174,7 @@ function M.prune_entries(cwd)
   local seen = {}
   for _, entry in ipairs(data[cwd]) do
     if type(entry) == "table" then
-      local key = entry.path .. ":" .. entry.line
+      local key = (entry.rel_path or entry.path) .. ":" .. entry.line
       if not seen[key] then
         seen[key] = true
         table.insert(pruned, entry)

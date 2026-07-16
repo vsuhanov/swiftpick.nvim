@@ -1,6 +1,7 @@
 local state = require("swiftpick.state")
 local storage = require("swiftpick.storage")
 local config = require("swiftpick.config")
+local paths = require("swiftpick.helper.paths")
 
 local M = {}
 
@@ -18,7 +19,8 @@ local function get_shortcuts_string(files, opts)
         table.insert(keys, opts.empty_entry)
       end
     else
-      local is_active = type(file) == "table" and file.path == current_file
+      local is_active = type(file) == "table"
+        and (file.path == current_file or paths.resolve(file, vim.uv.cwd()) == current_file)
       local key = (not opts.use_digits and config.values.keybinds.pick_entry.chars[table_key])
         or config.values.keybinds.pick_entry.digits[table_key]
       table.insert(keys, is_active and ("%s%s%s"):format(opts.active_prefix, key, opts.active_suffix) or key)

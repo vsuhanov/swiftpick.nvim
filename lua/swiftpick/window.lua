@@ -46,7 +46,7 @@ local function get_display_entries(entries)
         table.insert(display, paths.to_relative(entry, cwd))
       end
     elseif type(entry) == "table" then
-      local p = entry.path or ""
+      local p = paths.resolve(entry, cwd) or ""
       if not state.display_absolute_paths and cwd then
         p = paths.to_relative(p, cwd)
       end
@@ -316,7 +316,12 @@ function M.switch_to_edit_mode()
             local key = abs .. ":" .. line_num
             if vim.fn.filereadable(abs) == 1 and not seen[key] then
               seen[key] = true
-              table.insert(valid_entries, { path = abs, line = tonumber(line_num), label = label or "" })
+              table.insert(valid_entries, {
+                path = abs,
+                rel_path = paths.to_relative(abs, cwd),
+                line = tonumber(line_num),
+                label = label or "",
+              })
             end
           end
         end

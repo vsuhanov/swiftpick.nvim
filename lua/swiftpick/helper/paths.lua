@@ -96,4 +96,21 @@ function M.to_absolute(path, cwd)
   return (vim.fn.fnamemodify(cwd .. "/" .. path, ":p"):gsub("/$", ""))
 end
 
+---Resolve the best openable absolute path for an entry.
+---
+---Prefers the entry's `rel_path` resolved against `cwd` when that file exists,
+---falling back to the stored absolute `path` otherwise.
+---@param entry SwiftpickEntry
+---@param cwd string Absolute path of the working directory to resolve against.
+---@return string Absolute path to open.
+function M.resolve(entry, cwd)
+  if entry.rel_path and entry.rel_path ~= "" and cwd then
+    local candidate = M.to_absolute(entry.rel_path, cwd)
+    if vim.fn.filereadable(candidate) == 1 then
+      return candidate
+    end
+  end
+  return entry.path
+end
+
 return M

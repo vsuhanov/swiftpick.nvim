@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 -m json.tool)",
+      "Read(//Users/vitaly/.local/share/nvim/swiftpick/**)"
+    ]
+  }
+}
