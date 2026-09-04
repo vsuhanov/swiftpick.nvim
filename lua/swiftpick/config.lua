@@ -22,6 +22,23 @@ M.defaults.empty_entry_identifier = "<empty>"
 M.defaults.create_default_user_commands = true
 ---@type string The prefix for default user commands created by SwiftPick.
 M.defaults.default_user_command_prefix = "SwiftPick"
+---@type boolean Whether to prompt for a label when adding an entry. If false, the label defaults to the text of the line the entry points at.
+M.defaults.prompt_for_label_on_add = true
+
+---Options for the telescope extension (`:Telescope swiftpick`).
+---@class SwiftpickTelescopeOpts
+M.defaults.telescope = {
+  ---Mappings that are active inside the swiftpick telescope picker, per mode. Set a mode to `false` to disable it.
+  ---@class SwiftpickTelescopeMappingOpts
+  mappings = {
+    ---@type table<string, string|false> Remove the highlighted entry from the list.
+    delete_entry = { i = "<C-d>", n = "d" },
+    ---@type table<string, string|false> Toggle between the local and the global list.
+    toggle_use_global_context = { i = "<C-g>", n = "<C-g>" },
+    ---@type table<string, string|false> Toggle between absolute and relative paths.
+    toggle_display_absolute_paths = { i = "<C-t>", n = "<C-t>" },
+  },
+}
 
 ---Keybinds that are available when the picker window is open. These keybinds are non-conflicting with your other keybinds, as they are only active when the picker window is open.
 ---@class SwiftpickKeybindOpts

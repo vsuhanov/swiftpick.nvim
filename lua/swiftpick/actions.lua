@@ -51,6 +51,7 @@ end
 ---@field use_global_context? boolean
 ---@field line? integer
 ---@field label? string
+---@field prompt_for_label? boolean
 
 function M.add(opts)
   opts = opts or {}
@@ -113,6 +114,16 @@ function M.add(opts)
     if lines and lines[1] then
       default_label = vim.trim(lines[1])
     end
+  end
+
+  local should_prompt = opts.prompt_for_label
+  if should_prompt == nil then
+    should_prompt = config.values.prompt_for_label_on_add ~= false
+  end
+
+  if not should_prompt then
+    do_add(default_label)
+    return
   end
 
   prompt_for_label(default_label, function(label)
@@ -191,6 +202,16 @@ function M.open_picker(opts)
   end
   state.opened_picker_from = { buf = vim.api.nvim_get_current_buf(), win = vim.api.nvim_get_current_win() }
   require("swiftpick.window").create_picker_window(opts)
+end
+
+---@class SwiftpickOpenTelescopePickerOpts
+---@field cwd? string
+---@field use_global_context? boolean
+---@field display_absolute_paths? boolean
+
+---@param opts? SwiftpickOpenTelescopePickerOpts
+function M.open_telescope_picker(opts)
+  require("swiftpick.telescope").picker(opts)
 end
 
 function M.close_picker()

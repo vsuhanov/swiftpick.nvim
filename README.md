@@ -20,6 +20,7 @@ Demo:
   - [General Options](#general-options)
   - [Keybind options](#keybind-options)
   - [Advanced Configuration Example](#advanced-configuration-example)
+  - [Telescope Integration](#telescope-integration)
   - [Lualine Integration](#lualine-integration)
 - [Differences with `harpoon`](#differences-with-harpoon)
 
@@ -36,6 +37,9 @@ Demo:
 - **Prune entries**: Remove all empty or duplicate slots in one action,
   compacting the list.
 - **Highly configurable**: Easily change key mappings, picker hints, and more.
+- **Telescope picker with preview**: Browse the same list through
+  [`telescope.nvim`](https://github.com/nvim-telescope/telescope.nvim), with the
+  saved location previewed next to it.
 - **Built-in lualine support**: See your currently available keybinds in the
   statusline.
 
@@ -150,6 +154,14 @@ require("swiftpick".setup({
   empty_entry_identifier = "<empty>"
   create_default_user_commands = true
   default_user_command_prefix = "SwiftPick"
+  prompt_for_label_on_add = true
+  telescope = {
+    mappings = {
+      delete_entry = { i = "<C-d>", n = "d" }
+      toggle_use_global_context = { i = "<C-g>", n = "<C-g>" }
+      toggle_display_absolute_paths = { i = "<C-t>", n = "<C-t>" }
+    }
+  }
   keybinds = {
     open_picker = "<leader>h"
     close_picker = { "q", "<Esc>", "<C-c>" }
@@ -222,6 +234,8 @@ require("swiftpick".setup({
 | `empty_entry_identifier`           | `string`  | `"<empty>"`                               | Text used to represent empty entries in the picker.                                                                       |
 | `create_default_user_commands`     | `boolean` | `true`                                    | Create the default SwiftPick user commands automatically.                                                                 |
 | `default_user_command_prefix`      | `string`  | `"SwiftPick"`                             | Prefix used when creating default user commands.                                                                          |
+| `prompt_for_label_on_add`          | `boolean` | `true`                                    | Prompt for a label when adding an entry. When `false`, the label defaults to the text of the line the entry points at.     |
+| `telescope.mappings`               | `table`   | see [Telescope Integration](#telescope-integration) | Mappings active inside the telescope picker, per mode.                                          |
 
 ### Keybind options
 
@@ -261,6 +275,102 @@ vim.keymap.set("n", "<leader>AG", function()
     { use_global_context = true, filename = vim.api.nvim_buf_get_name(0) }
   )
 end, { desc = "[A]dd [G]lobal to swiftpick" })
+```
+
+By default, adding an entry opens a prompt asking you for a label. You can skip
+that prompt for a single call with `prompt_for_label = false`, in which case the
+label defaults to the text of the line the entry points at:
+
+```lua
+vim.keymap.set("n", "<leader>ag", function()
+  require("swiftpick.actions").add(
+    { use_global_context = true, prompt_for_label = false }
+  )
+end, { desc = "[a]dd [g]lobal to swiftpick without a label prompt" })
+```
+
+You can also pass `label = "my label"` to set the label directly, or set
+`prompt_for_label_on_add = false` in `setup()` to disable the prompt everywhere
+(including the picker's `a`/`A` keybinds and the `:SwiftPickAdd*` commands).
+
+### Telescope Integration
+
+`swiftpick` ships a [`telescope.nvim`](https://github.com/nvim-telescope/telescope.nvim)
+extension that lists the exact same entries as the picker window, but with the
+saved location shown in the preview panel. This is handy when your list has
+grown past the handful of entries you know by heart, or when several entries
+point at the same file and you want to see what is actually there before
+jumping.
+
+Load it after telescope is set up:
+
+```lua
+require("telescope").load_extension("swiftpick")
+```
+
+Then use any of:
+
+```vim
+:Telescope swiftpick          " uses the current context
+:Telescope swiftpick local    " force the project-local list
+:Telescope swiftpick global   " force the global list
+```
+
+The same is available as user commands (`:SwiftPickTelescope`,
+`:SwiftPickTelescopeLocal`, `:SwiftPickTelescopeGlobal`) and from lua:
+
+```lua
+vim.keymap.set("n", "<leader>hf", function()
+  require("swiftpick.actions").open_telescope_picker()
+end, { desc = "Find swiftpick entry" })
+
+vim.keymap.set("n", "<leader>hF", function()
+  require("swiftpick.actions").open_telescope_picker({ use_global_context = true })
+end, { desc = "Find swiftpick entry [Global]" })
+```
+
+Each result is rendered as `<index> <emoji> <path>:<line>  <label>`, where the
+index is the entry's position in the list (so it matches the hotkey you would
+press in the picker window), and the emoji prefix follows the same rules as the
+picker window. Empty slots are skipped, since there is nothing to preview.
+Selecting an entry opens the file and jumps to the stored line.
+
+Inside the picker:
+
+| Mapping        | Action                                                |
+| -------------- | ----------------------------------------------------- |
+| `<CR>`         | Open the entry at its stored line.                    |
+| `<C-d>` / `d`  | Remove the highlighted entry from the list.           |
+| `<C-g>`        | Toggle between the project-local and the global list. |
+| `<C-t>`        | Toggle between relative and absolute paths.           |
+
+Toggling inside the telescope picker only affects that picker; it does not
+change the context used by the picker window.
+
+These mappings can be changed through the `telescope.mappings` option in
+`setup()`, or through the extension config, which takes precedence:
+
+```lua
+require("telescope").setup({
+  extensions = {
+    swiftpick = {
+      mappings = {
+        delete_entry = { i = "<C-x>", n = "dd" },
+        -- set a mode to `false` to disable it
+        toggle_display_absolute_paths = { i = false, n = "<C-t>" },
+      },
+    },
+  },
+})
+```
+
+Any other telescope option (a theme, `layout_config`, ...) can be passed along
+too, either through the extension config or per call:
+
+```lua
+require("swiftpick.actions").open_telescope_picker(
+  require("telescope.themes").get_ivy({ use_global_context = true })
+)
 ```
 
 ### Lualine Integration

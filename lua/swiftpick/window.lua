@@ -8,7 +8,7 @@ local config = require("swiftpick.config")
 local binds = require("swiftpick.binds")
 local storage = require("swiftpick.storage")
 local paths = require("swiftpick.helper.paths")
-local emoji = require("swiftpick.helper.emoji")
+local display_helper = require("swiftpick.helper.display")
 local state = require("swiftpick.state")
 local footer = require("swiftpick.helper.footer")
 
@@ -29,37 +29,11 @@ local function get_display_entries(entries)
   local cwd = vim.uv.cwd()
   local display = {}
 
-  local path_count = {}
-  for _, entry in ipairs(entries) do
-    if type(entry) == "table" then
-      path_count[entry.path] = (path_count[entry.path] or 0) + 1
-    end
-  end
+  local path_count = display_helper.path_counts(entries)
 
   for _, entry in ipairs(entries) do
-    if type(entry) == "string" then
-      if entry == EMPTY() then
-        table.insert(display, entry)
-      elseif state.display_absolute_paths then
-        table.insert(display, entry)
-      else
-        table.insert(display, paths.to_relative(entry, cwd))
-      end
-    elseif type(entry) == "table" then
-      local p = paths.resolve(entry, cwd) or ""
-      if not state.display_absolute_paths and cwd then
-        p = paths.to_relative(p, cwd)
-      end
-      local label = entry.label or ""
-      local file_emoji = emoji.for_key(entry.path or "")
-      local prefix
-      if path_count[entry.path] and path_count[entry.path] > 1 then
-        local location_emoji = emoji.for_key((entry.path or "") .. ":" .. (entry.line or 0))
-        prefix = file_emoji .. location_emoji
-      else
-        prefix = file_emoji
-      end
-      table.insert(display, ("%s %s:%d  %s"):format(prefix, p, entry.line or 0, label))
+    if type(entry) == "string" or type(entry) == "table" then
+      table.insert(display, display_helper.line(entry, cwd, state.display_absolute_paths, path_count))
     end
   end
 

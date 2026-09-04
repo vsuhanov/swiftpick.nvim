@@ -2,7 +2,13 @@
   "permissions": {
     "allow": [
       "Bash(python3 -m json.tool)",
-      "Read(//Users/vitaly/.local/share/nvim/swiftpick/**)"
+      "Read(//Users/vitaly/.local/share/nvim/swiftpick/**)",
+      "Bash(nvim --version)",
+      "Bash(nvim --headless -u NONE -l /private/tmp/claude-501/-Users-vitaly-projects-swiftpick-nvim/e505fd68-8e7f-454c-a257-748652d5f8c5/scratchpad/test_telescope.lua)",
+      "Bash(nvim --headless -u NONE -l /private/tmp/claude-501/-Users-vitaly-projects-swiftpick-nvim/e505fd68-8e7f-454c-a257-748652d5f8c5/scratchpad/test_integration.lua)",
+      "Bash(tmux kill-session *)",
+      "Bash(tmux new-session *)",
+      "Bash(tmux capture-pane *)"
     ]
   }
 }
